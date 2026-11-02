@@ -1,0 +1,14 @@
+services:
+  web:
+    #1.tự động tìm dockerfile để build image 
+    build: .
+    container_name: fifa-worldcup-app
+    ports:
+      - "2912:5000"
+#4.gắn kết thư mục (volumes) , giúp db sqlite và code được đồng bộ
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HOST=0.0.0.0
+    restart: unless-stopped

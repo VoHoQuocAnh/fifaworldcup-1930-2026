@@ -1,8 +1,18 @@
-numpy
-pandas
-matplotlib
-scikit-learn
-xgboost
-joblib
-seaborn
-flask
+# ==========================================================
+# ⚽ FIFA World Cup Prediction ML & Web Application
+# Dependencies & Requirements
+# ==========================================================
+
+# Core Data Science & Machine Learning
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+joblib>=1.3.0
+
+# Data Visualization & Model Analytics
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Web Application & REST API
+flask>=2.3.0

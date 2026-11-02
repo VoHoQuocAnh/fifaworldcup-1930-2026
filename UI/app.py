@@ -458,6 +458,6 @@ if __name__ == "__main__":
     print("=" * 64)
     print("⚽ FIFA WORLD CUP 2026 ML WEB APPLICATION")
     print("📂 Database SQLite : UI/worldcup.db")
-    print("🌐 Truy cập giao diện tại: http://127.0.0.1:5000")
+    print("🌐 Truy cập giao diện tại: http://0.0.0.0:5000")
     print("=" * 64)
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False)

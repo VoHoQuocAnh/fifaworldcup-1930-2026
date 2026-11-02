@@ -1,15 +1,16 @@
-`# ⚽ FiFaWorldCup-1930-2026 — Dự Đoán Kết Quả FIFA World Cup với Machine Learning
+# ⚽ FiFaWorldCup-1930-2026 — Dự Đoán Kết Quả FIFA World Cup với Machine Learning
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-Pipeline-orange?logo=scikit-learn&logoColor=white)
 ![XGBoost](https://img.shields.io/badge/XGBoost-Classifier-green)
 ![Flask](https://img.shields.io/badge/Flask-Web%20UI%20%2B%20SQLite-000000?logo=flask&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen)
 
-Dự án áp dụng các kỹ thuật học máy (**Machine Learning Pipeline**) để phân tích tập dữ liệu lịch sử các kỳ **FIFA World Cup từ năm 1930 đến 2026** (1.069 trận đấu). Mục tiêu là xây dựng quy trình tiền xử lý chống rò rỉ dữ liệu (`ColumnTransformer` + `OneHotEncoder` + `StandardScaler`), huấn luyện, đánh giá và triển khai dự đoán trực tiếp trên Terminal lẫn Giao diện Web (Frontend + Backend + SQLite Database) cho 2 bài toán chính:
+Dự án áp dụng các kỹ thuật học máy (**Machine Learning Pipeline**) để phân tích tập dữ liệu lịch sử các kỳ **FIFA World Cup từ năm 1930 đến 2026** (1.069 trận đấu). Mục tiêu là xây dựng quy trình tiền xử lý chống rò rỉ dữ liệu (`ColumnTransformer` + `OneHotEncoder` + `StandardScaler`), huấn luyện, đánh giá và triển khai dự đoán trực tiếp trên Terminal, Giao diện Web (Frontend + Backend + SQLite Database) và môi trường Docker Container hóa cho 2 bài toán chính:
 
 1. **Hồi quy (Regression):** Dự đoán số bàn thắng kỳ vọng (`xG` - Expected Goals) của hai đội bóng (`total_goals_team1`, `total_goals_team2`).
-2. **Phân loại đa lớp (Multi-class Classification):** Dự đoán kết quả trận đấu giữa hai đội bóng: **Thắng (2)**, **Hòa (1)**, hoặc **Thua (0)**.
+2. **Phân loại đa lớp (Multi-class Classification):** Dự đoán kết quả trận đấu giữa hai đội: **Thắng (2)**, **Hòa (1)**, hoặc **Thua (0)**.
 
 ---
 
@@ -53,8 +54,11 @@ Fifaworldcup_ML/
 ├── Main.py                          # File thực thi huấn luyện & đánh giá chính (Main Pipeline)
 ├── predict.py                       # Script dự đoán kết quả cặp đấu bất kỳ ngay trên Terminal
 ├── model_comparison.png             # Biểu đồ so sánh độ chính xác giữa các model
-├── Readme.md                        # Tài liệu hướng dẫn dự án
+├── Dockerfile                       # Cấu hình đóng gói ứng dụng bằng Docker (Python 3.11-slim)
+├── docker-compose.yml               # Cấu hình triển khai container & ánh xạ cổng (2912:5000)
+├── .dockerignore                    # Danh sách file/thư mục bỏ qua khi build Docker Image
 ├── requirements.txt                 # Danh sách các thư viện phụ thuộc
+├── Readme.md                        # Tài liệu hướng dẫn dự án
 └── .gitignore                       # Cấu hình bỏ qua file rác khi đẩy Git
 ```
 
@@ -78,19 +82,21 @@ Dưới đây là biểu đồ so sánh độ chính xác (**Accuracy**) giữa 
 
 ## ⚙️ Hướng dẫn cài đặt và sử dụng (How to Run)
 
-### 1. Clone repository & Cài đặt thư viện
+### Cách 1: Chạy trực tiếp bằng Python (Native Environment)
+
+#### 1. Clone repository & Cài đặt thư viện
 ```bash
 git clone https://github.com/VoHoQuocAnh/Fifaworldcup_ML.git
 cd Fifaworldcup_ML
 pip install -r requirements.txt
 ```
 
-### 2. Huấn luyện mô hình và tự động lưu `best_model.pkl`
+#### 2. Huấn luyện mô hình và tự động lưu `best_model.pkl`
 ```bash
 python Main.py
 ```
 
-### 3. Dự đoán cặp đấu bất kỳ trên Terminal (`predict.py`)
+#### 3. Dự đoán cặp đấu bất kỳ trên Terminal (`predict.py`)
 - **Chế độ nhập tương tác trực tiếp:**
   ```bash
   python predict.py
@@ -100,7 +106,7 @@ python Main.py
   python predict.py --team1 "Argentina" --team2 "France" --stage "Final" --year 2026
   ```
 
-### 4. Khởi chạy Giao diện Web & Cơ sở dữ liệu (`UI/`)
+#### 4. Khởi chạy Giao diện Web & Cơ sở dữ liệu (`UI/`)
 ```bash
 python UI/app.py
 ```
@@ -108,6 +114,29 @@ Sau đó mở trình duyệt truy cập: **http://127.0.0.1:5000**
 
 ---
 
+### Cách 2: Chạy thông qua Docker & Docker Compose 🐳
+
+Dự án đã được container hóa hoàn chỉnh, bạn có thể triển khai nhanh chóng mà không cần cài đặt môi trường Python thủ công:
+
+#### 1. Khởi chạy với Docker Compose
+```bash
+docker-compose up --build -d
+```
+
+#### 2. Truy cập ứng dụng
+Sau khi container khởi động, mở trình duyệt truy cập:
+👉 **http://localhost:2912**
+
+*(Cổng `2912` trên máy của bạn được ánh xạ tới cổng `5000` bên trong container, đồng thời volume được liên kết trực tiếp giúp dữ liệu SQLite và code luôn đồng bộ).*
+
+#### 3. Dừng container khi không sử dụng
+```bash
+docker-compose down
+```
+
+---
+
 ## 👤 Tác giả (Author)
 - **Họ và tên:** Võ Hồ Quốc Anh
 - **Email:** vohoquocnanh2024@gmail.com
+- **GitHub:** [VoHoQuocAnh](https://github.com/VoHoQuocAnh)
