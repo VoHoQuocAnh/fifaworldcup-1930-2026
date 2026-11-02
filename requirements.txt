@@ -1,8 +1,8 @@
 numpy
 pandas
+matplotlib
 scikit-learn
 xgboost
 joblib
-matplotlib
 seaborn
 flask
