@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FiFaWorldCup-1930-2026 — AI Match Predictor &amp; Group Stage</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+    <!-- Top Header -->
+    <header class="top-header">
+        <div class="container header-inner">
+            <div class="brand">
+                <div class="wc26-mini-logo">
+                    <span class="wc26-num">26</span>
+                </div>
+                <div>
+                    <div class="brand-badge">OFFICIAL ML PIPELINE • 1930 – 2026</div>
+                    <h1 class="brand-title">FiFaWorldCup-1930-2026 <span class="tm-mark">AI PREDICTOR</span></h1>
+                </div>
+            </div>
+
+            <nav class="header-nav">
+                <a href="#stadiumArena" class="nav-pill active">🏟️ Sân Khấu Dự Đoán</a>
+                <a href="#groupStageBoard" class="nav-pill">🏆 Bảng Đấu A – L (2026)</a>
+                <a href="#dbHistorySection" class="nav-pill">💾 Database (<span id="kpiMatches">1,069</span> trận)</a>
+            </nav>
+
+            <div class="kpi-strip">
+                <div class="kpi-pill">
+                    <span class="kpi-label">Best Pipeline</span>
+                    <span class="kpi-value lime-text" id="kpiBestModel">XGBoost</span>
+                </div>
+                <div class="kpi-pill">
+                    <span class="kpi-label">SQLite DB</span>
+                    <span class="kpi-value gold-text">UI/worldcup.db</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- =========================================================================
+         SECTION 1: STADIUM FLOODLIGHTS & FLAG ARCH HERO ARENA (MẪU ẢNH 2)
+         ========================================================================= -->
+    <section id="stadiumArena" class="stadium-hero-section">
+        <div class="stadium-backdrop"></div>
+        <div class="spotlight spotlight-left"></div>
+        <div class="spotlight spotlight-right"></div>
+        <div class="confetti-layer"></div>
+
+        <!-- Arch of International Flags (Top Ribbon) -->
+        <div class="flag-arch-ribbon" id="flagArchRibbon"></div>
+
+        <div class="container hero-container">
+            <div class="hero-title-block">
+                <div class="neon-stage-pill">AI MATCH PREDICTOR ARENA</div>
+                <h2 class="fifa-poster-title">FiFaWorldCup-1930-2026</h2>
+                <p class="hero-subtitle">Chọn 2 đội tuyển bất kỳ hoặc nhấn trực tiếp vào <strong>Bảng Đấu A – L</strong> bên dưới để dự đoán bằng Pipeline Machine Learning</p>
+            </div>
+
+            <!-- Quick Classic Matchups -->
+            <div class="presets-bar">
+                <span class="presets-label">🔥 CẶP ĐẤU KINH ĐIỂN:</span>
+                <div class="presets-list">
+                    <button class="preset-chip" data-t1="Argentina" data-t2="France" data-stage="Final">Argentina vs France</button>
+                    <button class="preset-chip" data-t1="Brazil" data-t2="Morocco" data-stage="Group Stage">Brazil vs Morocco (Bảng C)</button>
+                    <button class="preset-chip" data-t1="Spain" data-t2="Uruguay" data-stage="Group Stage">Spain vs Uruguay (Bảng H)</button>
+                    <button class="preset-chip" data-t1="England" data-t2="Croatia" data-stage="Group Stage">England vs Croatia (Bảng L)</button>
+                    <button class="preset-chip" data-t1="Germany" data-t2="Ecuador" data-stage="Group Stage">Germany vs Ecuador (Bảng E)</button>
+                </div>
+            </div>
+
+            <!-- Main Face-off Arena around the Golden Trophy -->
+            <div class="faceoff-arena">
+                <!-- Team 1 Card -->
+                <div class="contender-card contender-left" id="cardTeam1">
+                    <div class="contender-slot-badge">ĐỘI TUYỂN 1 (TEAM A)</div>
+                    <div class="flag-frame">
+                        <img id="team1FlagImg" src="https://flagcdn.com/w160/ar.png" alt="Team 1 Flag" class="contender-flag-img" />
+                    </div>
+                    <select id="team1Select" class="contender-select"></select>
+                    <div class="contender-stats" id="team1MiniStats">
+                        <span>Tỉ lệ thắng: <strong>--%</strong></span>
+                        <span>•</span>
+                        <span>Số trận WC: <strong>--</strong></span>
+                    </div>
+                </div>
+
+                <!-- Center Golden Trophy Burst & Controls (Mẫu Ảnh 2) -->
+                <div class="trophy-center-stage">
+                    <div class="trophy-hero-visual">
+                        <div class="starburst-rays"></div>
+                        <img src="/static/images/wc_stadium_hero.png" alt="FIFA World Cup Trophy" class="hero-trophy-img" />
+                        <div class="vs-floating-badge">VS</div>
+                    </div>
+
+                    <button id="swapTeamsBtn" class="swap-btn" title="Đảo vị trí 2 đội">⇄ ĐẢO VỊ TRÍ HAI ĐỘI</button>
+
+                    <div class="match-controls">
+                        <div class="control-group">
+                            <label for="stageSelect">VÒNG ĐẤU</label>
+                            <select id="stageSelect" class="control-input"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="yearSelect">KỲ WORLD CUP</label>
+                            <select id="yearSelect" class="control-input"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="stadiumSelect">SÂN VẬN ĐỘNG</label>
+                            <select id="stadiumSelect" class="control-input"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="modelSelect">MÔ HÌNH AI</label>
+                            <select id="modelSelect" class="control-input">
+                                <option value="">✨ Tự động (Best: XGBoost)</option>
+                                <option value="XGBoost">XGBoost Classifier</option>
+                                <option value="Random Forest">Random Forest Classifier</option>
+                                <option value="KNN">K-Nearest Neighbors (KNN)</option>
+                                <option value="Logistic Regression">Logistic Regression</option>
+                                <option value="Decision Tree">Decision Tree Classifier</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button id="predictBtn" class="predict-neon-btn">
+                        ⚡ PHÂN TÍCH &amp; DỰ ĐOÁN NGAY
+                    </button>
+                    <div id="errorAlert" class="error-alert hidden"></div>
+                </div>
+
+                <!-- Team 2 Card -->
+                <div class="contender-card contender-right" id="cardTeam2">
+                    <div class="contender-slot-badge">ĐỘI TUYỂN 2 (TEAM B)</div>
+                    <div class="flag-frame">
+                        <img id="team2FlagImg" src="https://flagcdn.com/w160/fr.png" alt="Team 2 Flag" class="contender-flag-img" />
+                    </div>
+                    <select id="team2Select" class="contender-select"></select>
+                    <div class="contender-stats" id="team2MiniStats">
+                        <span>Tỉ lệ thắng: <strong>--%</strong></span>
+                        <span>•</span>
+                        <span>Số trận WC: <strong>--</strong></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <main class="container main-content">
+        <!-- =====================================================================
+             SECTION 2: LIVE SCOREBOARD & AI COUNCIL RESULT
+             ===================================================================== -->
+        <section class="result-grid" id="predictionResultSection">
+            <!-- Left: Scoreboard + Probability Meter -->
+            <div class="glass-panel scoreboard-panel">
+                <div class="panel-header">
+                    <h2>🎯 KẾT QUẢ DỰ ĐOÁN &amp; TỈ SỐ KỲ VỌNG (xG)</h2>
+                    <span class="model-tag" id="activeModelTag">Pipeline: XGBoost</span>
+                </div>
+
+                <div class="scoreboard-banner">
+                    <div class="score-team">
+                        <img id="resFlag1" src="https://flagcdn.com/w80/ar.png" alt="Flag 1" class="score-flag-img" />
+                        <span class="score-name" id="resTeam1">Argentina</span>
+                        <span class="xg-sub" id="resXg1">xG: 1.68</span>
+                    </div>
+
+                    <div class="score-center">
+                        <div class="winner-pill" id="resWinnerPill">DỰ ĐOÁN: ARGENTINA THẮNG</div>
+                        <div class="predicted-score" id="resScore">2 - 1</div>
+                        <div class="score-meta" id="resMeta">Final • MetLife Stadium</div>
+                    </div>
+
+                    <div class="score-team">
+                        <img id="resFlag2" src="https://flagcdn.com/w80/fr.png" alt="Flag 2" class="score-flag-img" />
+                        <span class="score-name" id="resTeam2">France</span>
+                        <span class="xg-sub" id="resXg2">xG: 1.42</span>
+                    </div>
+                </div>
+
+                <!-- 3-Way Probability Meter -->
+                <div class="prob-section">
+                    <div class="prob-labels">
+                        <div class="prob-label-item win-color">
+                            <span id="probLabelT1">Argentina Thắng</span>
+                            <strong id="probValT1">45.2%</strong>
+                        </div>
+                        <div class="prob-label-item draw-color">
+                            <span>Hòa (Draw)</span>
+                            <strong id="probValDraw">21.9%</strong>
+                        </div>
+                        <div class="prob-label-item loss-color">
+                            <span id="probLabelT2">France Thắng</span>
+                            <strong id="probValT2">32.9%</strong>
+                        </div>
+                    </div>
+
+                    <div class="prob-bar-track">
+                        <div class="prob-segment seg-win" id="barWin" style="width: 45.2%"></div>
+                        <div class="prob-segment seg-draw" id="barDraw" style="width: 21.9%"></div>
+                        <div class="prob-segment seg-loss" id="barLoss" style="width: 32.9%"></div>
+                    </div>
+                </div>
+
+                <!-- Side-by-side Team Comparison -->
+                <div class="comparison-block">
+                    <h3 class="sub-heading">⚔️ SO SÁNH THỰC LỰC LỊCH SỬ WORLD CUP</h3>
+                    <div id="comparisonBars" class="comp-rows"></div>
+                </div>
+            </div>
+
+            <!-- Right: 5-Model AI Council + Head-to-Head -->
+            <div class="glass-panel council-panel">
+                <div class="panel-header">
+                    <h2>🗳️ HỘI ĐỒNG 5 MÔ HÌNH MACHINE LEARNING</h2>
+                    <span class="sub-badge">Multi-Model Consensus</span>
+                </div>
+                <div id="councilList" class="council-list"></div>
+
+                <div class="h2h-section">
+                    <div class="panel-header h2h-header">
+                        <h3>📜 LỊCH SỬ ĐỐI ĐẦU TRỰC TIẾP (HEAD-TO-HEAD)</h3>
+                        <span id="h2hSummaryBadge" class="sub-badge">0 trận</span>
+                    </div>
+                    <div id="h2hList" class="h2h-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             SECTION 3: FIFA WORLD CUP 2026™ GROUP STAGE BOARD (MẪU ẢNH 1)
+             ===================================================================== -->
+        <section id="groupStageBoard" class="wc26-poster-section">
+            <div class="wc26-poster-header">
+                <h2 class="fifa-poster-title">FIFA WORLD CUP 2026<span class="tm-mark">™</span></h2>
+                <div class="neon-stage-pill">GROUP STAGE</div>
+                <p class="poster-instruction">
+                    💡 <strong>Bảng đấu tương tác:</strong> Nhấn vào bất kỳ đội tuyển nào trong 12 bảng (A – L) để chọn làm
+                    <span class="slot-indicator" id="slotIndicatorText">ĐỘI TUYỂN 1</span>, hoặc nhấn vào chữ cái tên bảng (A–L) để đấu cặp hạt giống của bảng đó!
+                </p>
+            </div>
+
+            <div class="wc26-poster-grid">
+                <!-- Cột Trái: Bảng A -> F -->
+                <div class="wc26-groups-col" id="groupsColLeft"></div>
+
+                <!-- Cột Giữa: Cúp Vàng Thế Giới + Logo 26 (Đúng chuẩn Mẫu Ảnh 1) -->
+                <div class="wc26-trophy-col">
+                    <div class="poster-selected-box">
+                        <div class="poster-sel-title">CẶP ĐẤU ĐANG CHỌN</div>
+                        <div class="poster-sel-teams">
+                            <div class="poster-sel-team" id="posterSlot1">
+                                <img id="posterFlag1" src="https://flagcdn.com/w80/ar.png" alt="" />
+                                <span id="posterName1">ARGENTINA</span>
+                            </div>
+                            <span class="poster-vs">VS</span>
+                            <div class="poster-sel-team" id="posterSlot2">
+                                <img id="posterFlag2" src="https://flagcdn.com/w80/fr.png" alt="" />
+                                <span id="posterName2">FRANCE</span>
+                            </div>
+                        </div>
+                        <button id="posterPredictBtn" class="poster-predict-btn">⚡ DỰ ĐOÁN CẶP ĐẤU NÀY</button>
+                    </div>
+
+                    <div class="poster-trophy-wrap">
+                        <div class="trophy-golden-aura"></div>
+                        <img src="/static/images/trophy_center.png" alt="FIFA World Cup 2026 Trophy" class="poster-trophy-img" />
+                    </div>
+
+                    <div class="wc26-emblem-footer">
+                        <div class="wc26-big-number">26</div>
+                        <div class="wc26-emblem-sub">FIFA WORLD CUP 2026™</div>
+                    </div>
+                </div>
+
+                <!-- Cột Phải: Bảng G -> L -->
+                <div class="wc26-groups-col" id="groupsColRight"></div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             SECTION 4: DATABASE & MODEL ANALYTICS
+             ===================================================================== -->
+        <section id="dbHistorySection" class="bottom-grid">
+            <!-- Database Predictions Log -->
+            <div class="glass-panel db-history-panel">
+                <div class="panel-header">
+                    <div>
+                        <h2>💾 LỊCH SỬ DỰ ĐOÁN ĐÃ LƯU (SQLITE DATABASE)</h2>
+                        <p class="panel-desc">Lưu trữ trong bảng <code>predictions_history</code> tại <code>UI/worldcup.db</code>. Nhấn vào dòng bất kỳ để tải lại cặp đấu.</p>
+                    </div>
+                    <button id="clearHistoryBtn" class="btn-outline-danger">🗑️ Xóa lịch sử</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Thời gian</th>
+                                <th>Cặp đấu</th>
+                                <th>Vòng</th>
+                                <th>Tỉ số xG</th>
+                                <th>Kết quả dự đoán</th>
+                                <th>Xác suất (T1 / Hòa / T2)</th>
+                                <th>Mô hình</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Model Benchmark Leaderboard -->
+            <div class="glass-panel benchmark-panel">
+                <div class="panel-header">
+                    <div>
+                        <h2>📊 HIỆU SUẤT CÁC THUẬT TOÁN ML</h2>
+                        <p class="panel-desc">Đánh giá trên tập Test với Pipeline chống Data Leakage.</p>
+                    </div>
+                </div>
+                <div id="modelMetricsList" class="metrics-list"></div>
+            </div>
+        </section>
+
+        <!-- Historical World Cup Matches Explorer from SQLite -->
+        <section class="glass-panel archive-panel">
+            <div class="panel-header archive-header">
+                <div>
+                    <h2>🌍 KHO DỮ LIỆU LỊCH SỬ FIFA WORLD CUP (1930 – 2026)</h2>
+                    <p class="panel-desc">Truy vấn trực tiếp từ bảng <code>matches</code> trong cơ sở dữ liệu <code>UI/worldcup.db</code>.</p>
+                </div>
+                <div class="archive-filters">
+                    <select id="archiveYearFilter" class="control-input">
+                        <option value="">Tất cả các kỳ World Cup</option>
+                    </select>
+                    <select id="archiveTeamFilter" class="control-input">
+                        <option value="">Tất cả đội tuyển</option>
+                    </select>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Năm</th>
+                            <th>Chủ nhà</th>
+                            <th>Vòng đấu</th>
+                            <th>Đội 1</th>
+                            <th>Tỉ số</th>
+                            <th>Đội 2</th>
+                            <th>Sân vận động</th>
+                        </tr>
+                    </thead>
+                    <tbody id="archiveTableBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container footer-inner">
+            <span>⚽ Dự án <strong>FiFaWorldCup-1930-2026</strong> — Tác giả: <strong>Võ Hồ Quốc Anh</strong></span>
+            <span>Pipeline: Scikit-Learn • XGBoost • Flask • SQLite3 (UI/worldcup.db)</span>
+        </div>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
