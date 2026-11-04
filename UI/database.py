@@ -230,13 +230,18 @@ def get_team_summary(team_name: str) -> dict:
     played = len(rows)
     wins, draws, losses = 0, 0, 0
     goals_for, goals_against = 0, 0
+    clean_sheets = 0
+    knockout_played, knockout_wins = 0, 0
     years_played = set()
     finals_reached = 0
 
     for r in rows:
         years_played.add(r["world_cup_year"])
-        if str(r["stage"]).lower() == "final":
+        stg_lower = str(r["stage"]).lower()
+        if stg_lower == "final":
             finals_reached += 1
+        is_ko = "group" not in stg_lower
+
         if r["team1"] == team_name:
             gf, ga = int(r["goals_team1"]), int(r["goals_team2"])
         else:
@@ -244,8 +249,15 @@ def get_team_summary(team_name: str) -> dict:
 
         goals_for += gf
         goals_against += ga
+        if ga == 0:
+            clean_sheets += 1
+        if is_ko:
+            knockout_played += 1
+
         if gf > ga:
             wins += 1
+            if is_ko:
+                knockout_wins += 1
         elif gf < ga:
             losses += 1
         else:
@@ -254,6 +266,14 @@ def get_team_summary(team_name: str) -> dict:
     win_rate = round((wins / played) * 100, 1) if played > 0 else 0.0
     avg_gf = round(goals_for / played, 2) if played > 0 else 0.0
     avg_ga = round(goals_against / played, 2) if played > 0 else 0.0
+    cs_rate = round((clean_sheets / played) * 100, 1) if played > 0 else 0.0
+
+    # Chuẩn hóa 5 chỉ số Radar (thang điểm 0 - 100) để vẽ biểu đồ 5 cạnh
+    attack_score = min(98, max(25, int(round((avg_gf / 2.2) * 88 + (10 if played >= 15 else 0))))) if played > 0 else 45
+    defense_score = min(98, max(25, int(round(max(0.0, (2.4 - avg_ga) / 2.0) * 65 + cs_rate * 0.35)))) if played > 0 else 45
+    win_efficiency = min(98, max(25, int(round(win_rate * 1.15 + (draws / max(1, played)) * 25)))) if played > 0 else 40
+    ko_pedigree = min(98, max(20, int(round(min(55, knockout_played * 2.5) + finals_reached * 7 + (knockout_wins / max(1, knockout_played)) * 28)))) if played > 0 else 30
+    experience_score = min(98, max(20, int(round(min(70, played * 0.9) + min(28, len(years_played) * 1.4))))) if played > 0 else 25
 
     return {
         "team": team_name,
@@ -263,11 +283,22 @@ def get_team_summary(team_name: str) -> dict:
         "losses": losses,
         "goals_for": goals_for,
         "goals_against": goals_against,
+        "clean_sheets": clean_sheets,
+        "clean_sheet_rate": cs_rate,
+        "knockout_played": knockout_played,
+        "knockout_wins": knockout_wins,
         "win_rate": win_rate,
         "avg_goals_for": avg_gf,
         "avg_goals_against": avg_ga,
         "tournaments": len(years_played),
         "finals_reached": finals_reached,
+        "radar": {
+            "attack": attack_score,
+            "defense": defense_score,
+            "win_efficiency": win_efficiency,
+            "knockout": ko_pedigree,
+            "experience": experience_score,
+        },
     }
 
 

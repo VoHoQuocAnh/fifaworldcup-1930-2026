@@ -1,7 +1,8 @@
 import argparse
+import difflib
+import math
 import os
 import sys
-import difflib
 import joblib
 import numpy as np
 import pandas as pd
@@ -24,8 +25,14 @@ LABEL_MAP = {
     0: "THUA (Đội 2 thắng)",
 }
 
+_RESOURCE_CACHE = None
+
 
 def load_resources():
+    global _RESOURCE_CACHE
+    if _RESOURCE_CACHE is not None:
+        return _RESOURCE_CACHE
+
     if not os.path.exists(BEST_MODEL_PATH):
         raise FileNotFoundError(
             f"Chưa tìm thấy mô hình tại '{BEST_MODEL_PATH}'. Hãy chạy 'python Main.py' trước!"
@@ -34,7 +41,268 @@ def load_resources():
     bundle = joblib.load(BUNDLE_PATH) if os.path.exists(BUNDLE_PATH) else {}
     df = clean_fifa_dataframe(pd.read_csv(DATA_PATH))
     all_teams = sorted(set(df["team1"].dropna()).union(set(df["team2"].dropna())))
-    return best_model, bundle, df, all_teams
+    _RESOURCE_CACHE = (best_model, bundle, df, all_teams)
+    return _RESOURCE_CACHE
+
+
+def _poisson_pmf(k: int, lam: float) -> float:
+    lam = max(0.05, float(lam))
+    return (lam ** k) * math.exp(-lam) / math.factorial(k)
+
+
+def compute_poisson_scorelines(xg1: float, xg2: float, max_goals: int = 4) -> dict:
+    """
+    Tính ma trận xác suất tỉ số chính xác (Poisson Distribution 5x5)
+    từ số bàn thắng kỳ vọng xG của 2 đội.
+    """
+    matrix = []
+    flat_scores = []
+    total_prob = 0.0
+
+    for g1 in range(max_goals + 1):
+        row = []
+        p1 = _poisson_pmf(g1, xg1)
+        for g2 in range(max_goals + 1):
+            p2 = _poisson_pmf(g2, xg2)
+            p_joint = p1 * p2
+            total_prob += p_joint
+            row.append(p_joint)
+        matrix.append(row)
+
+    norm = total_prob if total_prob > 0 else 1.0
+    normalized_matrix = []
+    for g1 in range(max_goals + 1):
+        norm_row = []
+        for g2 in range(max_goals + 1):
+            pct = round((matrix[g1][g2] / norm) * 100, 1)
+            norm_row.append(pct)
+            outcome_type = "t1" if g1 > g2 else ("t2" if g2 > g1 else "draw")
+            flat_scores.append(
+                {
+                    "score": f"{g1} - {g2}",
+                    "g1": g1,
+                    "g2": g2,
+                    "prob": pct,
+                    "type": outcome_type,
+                }
+            )
+        normalized_matrix.append(norm_row)
+
+    flat_scores.sort(key=lambda x: x["prob"], reverse=True)
+    return {
+        "matrix": normalized_matrix,
+        "top_scores": flat_scores[:6],
+        "max_goals": max_goals,
+    }
+
+
+def build_explainable_ai(
+    df: pd.DataFrame,
+    t1: str,
+    t2: str,
+    stage: str,
+    host_country: str,
+    p_win: float,
+    p_draw: float,
+    p_loss: float,
+    xg1: float,
+    xg2: float,
+    h2h: dict,
+) -> dict:
+    """
+    Giải thích lý do mô hình AI đưa ra quyết định dự đoán (Explainable AI - XAI)
+    và sinh bản tin nhận định chiến thuật tự động.
+    """
+    m1_df = df[(df["team1"] == t1) | (df["team2"] == t1)]
+    m2_df = df[(df["team1"] == t2) | (df["team2"] == t2)]
+
+    def _quick_stats(sub_df, team):
+        total = len(sub_df)
+        if total == 0:
+            return {"played": 0, "win_rate": 30.0, "avg_gf": 1.1}
+        wins = 0
+        gf = 0
+        for _, r in sub_df.iterrows():
+            g_a = int(r["total_goals_team1"])
+            g_b = int(r["total_goals_team2"])
+            if r["team1"] == team:
+                gf += g_a
+                if g_a > g_b:
+                    wins += 1
+            else:
+                gf += g_b
+                if g_b > g_a:
+                    wins += 1
+        return {
+            "played": total,
+            "win_rate": round((wins / total) * 100, 1),
+            "avg_gf": round(gf / total, 2),
+        }
+
+    st1 = _quick_stats(m1_df, t1)
+    st2 = _quick_stats(m2_df, t2)
+
+    wr_diff = round(st1["win_rate"] - st2["win_rate"], 1)
+    xg_diff = round(xg1 - xg2, 2)
+    exp_diff = st1["played"] - st2["played"]
+
+    factors = []
+
+    # 1. Yếu tố Tỉ lệ thắng lịch sử
+    if abs(wr_diff) >= 2.0:
+        fav = t1 if wr_diff > 0 else t2
+        factors.append(
+            {
+                "icon": "📈",
+                "title": "Hiệu suất Thắng Lịch sử (Historical Win Rate)",
+                "impact": f"+{abs(wr_diff)}% nghiêng về {fav}",
+                "favor": "t1" if wr_diff > 0 else "t2",
+                "weight": min(100, int(45 + abs(wr_diff) * 1.4)),
+                "desc": f"{t1} có tỉ lệ thắng {st1['win_rate']}% ({st1['played']} trận) so với {st2['win_rate']}% ({st2['played']} trận) của {t2}.",
+            }
+        )
+    else:
+        factors.append(
+            {
+                "icon": "⚖️",
+                "title": "Hiệu suất Thắng Cân Bằng",
+                "impact": f"Chênh lệch chỉ {abs(wr_diff)}%",
+                "favor": "neutral",
+                "weight": 50,
+                "desc": f"Hai đội có tỉ lệ thắng lịch sử rất sát nhau ({st1['win_rate']}% vs {st2['win_rate']}%).",
+            }
+        )
+
+    # 2. Yếu tố Bàn thắng kỳ vọng (xG Offensive Power)
+    if abs(xg_diff) >= 0.12:
+        fav_xg = t1 if xg_diff > 0 else t2
+        factors.append(
+            {
+                "icon": "🎯",
+                "title": "Sức mạnh Tấn công & Bàn thắng Kỳ vọng (xG)",
+                "impact": f"+{abs(xg_diff)} xG cho {fav_xg}",
+                "favor": "t1" if xg_diff > 0 else "t2",
+                "weight": min(100, int(45 + abs(xg_diff) * 45)),
+                "desc": f"Mô hình Ridge Regression dự báo {t1} đạt {xg1} xG (TB {st1['avg_gf']} bàn/trận) so với {xg2} xG (TB {st2['avg_gf']} bàn/trận) của {t2}.",
+            }
+        )
+    else:
+        factors.append(
+            {
+                "icon": "🛡️",
+                "title": "Thế trận Giằng co (Tight xG Margin)",
+                "impact": f"xG sát nút ({xg1} vs {xg2})",
+                "favor": "neutral",
+                "weight": 52,
+                "desc": f"Hiệu suất ghi bàn kỳ vọng của hai đội gần như tương đương ({xg1} và {xg2} bàn).",
+            }
+        )
+
+    # 3. Kinh nghiệm đấu trường World Cup
+    if abs(exp_diff) >= 8:
+        fav_exp = t1 if exp_diff > 0 else t2
+        factors.append(
+            {
+                "icon": "🏛️",
+                "title": "Bản lĩnh & Kinh nghiệm World Cup",
+                "impact": f"+{abs(exp_diff)} trận cho {fav_exp}",
+                "favor": "t1" if exp_diff > 0 else "t2",
+                "weight": min(95, int(40 + min(50, abs(exp_diff) * 0.8))),
+                "desc": f"{fav_exp} sở hữu bề dày kinh nghiệm vượt trội tại các vòng chung kết ({max(st1['played'], st2['played'])} trận đã đấu).",
+            }
+        )
+
+    # 4. Lịch sử đối đầu trực tiếp (H2H)
+    if h2h["total"] > 0:
+        if h2h["team1_wins"] != h2h["team2_wins"]:
+            fav_h2h = t1 if h2h["team1_wins"] > h2h["team2_wins"] else t2
+            w_cnt = max(h2h["team1_wins"], h2h["team2_wins"])
+            factors.append(
+                {
+                    "icon": "⚔️",
+                    "title": "Ưu thế Đối đầu Trực tiếp (Head-to-Head)",
+                    "impact": f"{fav_h2h} thắng {w_cnt}/{h2h['total']} trận",
+                    "favor": "t1" if h2h["team1_wins"] > h2h["team2_wins"] else "t2",
+                    "weight": min(90, 50 + abs(h2h["team1_wins"] - h2h["team2_wins"]) * 15),
+                    "desc": f"Trong {h2h['total']} lần chạm trán tại World Cup, {t1} thắng {h2h['team1_wins']}, hòa {h2h['draws']}, {t2} thắng {h2h['team2_wins']}.",
+                }
+            )
+        else:
+            factors.append(
+                {
+                    "icon": "🤝",
+                    "title": "Lịch sử Đối đầu Cân tài Cân sức",
+                    "impact": f"Bất phân thắng bại ({h2h['total']} trận)",
+                    "favor": "neutral",
+                    "weight": 50,
+                    "desc": f"Hai đội từng gặp nhau {h2h['total']} lần tại World Cup với thành tích ngang ngửa ({h2h['team1_wins']} thắng - {h2h['draws']} hòa - {h2h['team2_wins']} thua).",
+                }
+            )
+
+    # 5. Lợi thế sân nhà (Host Advantage)
+    t1_host = str(t1).lower() in str(host_country).lower() or (
+        t1 == "USA" and "united states" in str(host_country).lower()
+    )
+    t2_host = str(t2).lower() in str(host_country).lower() or (
+        t2 == "USA" and "united states" in str(host_country).lower()
+    )
+    if t1_host or t2_host:
+        host_team = t1 if t1_host else t2
+        factors.append(
+            {
+                "icon": "🏟️",
+                "title": "Lợi thế Quốc gia Chủ nhà (Host Nation Boost)",
+                "impact": f"Sân nhà {host_team}",
+                "favor": "t1" if t1_host else "t2",
+                "weight": 78,
+                "desc": f"{host_team} thi đấu với tư cách đồng chủ nhà ({host_country}), nhận lợi thế lớn từ khán giả và điều kiện sân bãi.",
+            }
+        )
+
+    # Kịch bản đá luân lưu (nếu là vòng Knockout)
+    is_knockout = "group" not in str(stage).lower()
+    penalty_info = None
+    if is_knockout:
+        # Tính xác suất thắng luân lưu dựa trên kinh nghiệm + tỉ lệ thắng
+        pen_score1 = 50.0 + (st1["played"] - st2["played"]) * 0.12 + (st1["win_rate"] - st2["win_rate"]) * 0.18
+        pen_prob1 = round(min(72.0, max(28.0, pen_score1)), 1)
+        pen_prob2 = round(100.0 - pen_prob1, 1)
+        penalty_info = {
+            "enabled": True,
+            "draw_trigger_prob": round(p_draw * 100, 1),
+            "team1_pen_prob": pen_prob1,
+            "team2_pen_prob": pen_prob2,
+            "recommended_taker": t1 if pen_prob1 >= pen_prob2 else t2,
+        }
+
+    # Tổng hợp nhận định từ AI Bình luận viên
+    win_pct = round(p_win * 100, 1)
+    loss_pct = round(p_loss * 100, 1)
+    draw_pct = round(p_draw * 100, 1)
+    if p_win > p_loss and p_win > p_draw:
+        commentary = (
+            f"Dựa trên Pipeline học máy, {t1} được đánh giá nhỉnh hơn với {win_pct}% cơ hội giành chiến thắng "
+            f"(so với {loss_pct}% của {t2}). Sức mạnh hàng công kỳ vọng đạt {xg1} xG cùng bề dày thành tích "
+            f"({st1['win_rate']}% tỉ lệ thắng qua {st1['played']} trận WC) là điểm tựa giúp {t1} làm chủ thế trận tại {stage}."
+        )
+    elif p_loss > p_win and p_loss > p_draw:
+        commentary = (
+            f"Hệ thống AI nghiêng cán cân chiến thắng về phía {t2} với xác suất {loss_pct}% (trong khi {t1} là {win_pct}%). "
+            f"Với chỉ số bàn thắng kỳ vọng {xg2} xG và hiệu suất thi đấu ổn định ({st2['win_rate']}% thắng tại WC), "
+            f"{t2} có nhiều phương án khoan thủng hàng phòng ngự đối phương."
+        )
+    else:
+        commentary = (
+            f"Đây là cuộc đối đầu cực kỳ cân tài cân sức khi xác suất Hòa lên tới {draw_pct}% "
+            f"({t1} {win_pct}% - {t2} {loss_pct}%). Chỉ số bàn thắng kỳ vọng sát nút ({xg1} vs {xg2} xG) "
+            f"báo hiệu một thế trận chặt chẽ và có thể phải phân định thắng thua bằng hiệp phụ hoặc loạt sút luân lưu."
+        )
+
+    return {
+        "factors": factors[:4],
+        "commentary": commentary,
+        "penalty_shootout": penalty_info,
+    }
 
 
 def match_team_name(user_input: str, all_teams: list[str]) -> str:
@@ -211,6 +479,20 @@ def predict_match(
         }
 
     h2h = get_head_to_head(df, t1, t2)
+    poisson_data = compute_poisson_scorelines(xg1, xg2, max_goals=4)
+    xai_data = build_explainable_ai(
+        df=df,
+        t1=t1,
+        t2=t2,
+        stage=stage,
+        host_country=host_country,
+        p_win=p_win,
+        p_draw=p_draw,
+        p_loss=p_loss,
+        xg1=xg1,
+        xg2=xg2,
+        h2h=h2h,
+    )
 
     return {
         "team1": t1,
@@ -234,9 +516,155 @@ def predict_match(
             "team2_xg": xg2,
             "suggested_score": f"{score_t1} - {score_t2}",
         },
+        "poisson_scorelines": poisson_data,
+        "explainable_ai": xai_data,
         "council_votes": council_votes,
         "head_to_head": h2h,
     }
+
+
+def predict_batch_matches(
+    matches_spec: list[dict],
+    model_name: str | None = None,
+    monte_carlo: bool = False,
+) -> list[dict]:
+    """
+    Dự đoán hàng loạt trận đấu cùng lúc (Batch Vectorized Inference)
+    phục vụ giả lập toàn bộ Vòng Bảng & Vòng Knockout World Cup 2026 cực nhanh.
+    """
+    if not matches_spec:
+        return []
+
+    best_model, bundle, _, all_teams = load_resources()
+    all_models = bundle.get("all_models", {})
+    active_model = (
+        all_models[model_name]
+        if (model_name and model_name in all_models)
+        else best_model
+    )
+    gm1 = bundle.get("goal_model_team1")
+
+    fwd_rows = []
+    rev_rows = []
+    cleaned_teams = []
+
+    for m in matches_spec:
+        t1 = match_team_name(m["team1"], all_teams)
+        t2 = match_team_name(m["team2"], all_teams)
+        cleaned_teams.append((t1, t2))
+        stg = m.get("stage", "Group Stage")
+        grp = m.get("group", "Group A" if stg == "Group Stage" else "Knockout")
+        yr = int(m.get("world_cup_year", 2026))
+        host = m.get("host_country", "Canada, Mexico, United States")
+        std = m.get("stadium", "MetLife Stadium")
+
+        fwd_rows.append(
+            {
+                "world_cup_year": yr,
+                "team1": t1,
+                "team2": t2,
+                "stage": stg,
+                "group": grp,
+                "host_country": host,
+                "stadium": std,
+            }
+        )
+        rev_rows.append(
+            {
+                "world_cup_year": yr,
+                "team1": t2,
+                "team2": t1,
+                "stage": stg,
+                "group": grp,
+                "host_country": host,
+                "stadium": std,
+            }
+        )
+
+    fwd_df = pd.DataFrame(fwd_rows)
+    rev_df = pd.DataFrame(rev_rows)
+
+    probs_fwd = active_model.predict_proba(fwd_df)
+    probs_rev = active_model.predict_proba(rev_df)
+
+    g1_preds = gm1.predict(fwd_df) if gm1 is not None else np.full(len(matches_spec), 1.35)
+    g2_preds = gm1.predict(rev_df) if gm1 is not None else np.full(len(matches_spec), 1.15)
+
+    results = []
+    rng = np.random.default_rng()
+
+    for i, m in enumerate(matches_spec):
+        t1, t2 = cleaned_teams[i]
+        pf = probs_fwd[i]
+        pr = probs_rev[i]
+        p_loss = float((pf[0] + pr[2]) / 2.0)
+        p_draw = float((pf[1] + pr[1]) / 2.0)
+        p_win = float((pf[2] + pr[0]) / 2.0)
+        tot = p_win + p_draw + p_loss
+        p_win, p_draw, p_loss = p_win / tot, p_draw / tot, p_loss / tot
+
+        g1_raw = max(0.2, float(g1_preds[i]))
+        g2_raw = max(0.2, float(g2_preds[i]))
+        tot_xg = max(0.8, g1_raw + g2_raw)
+        xg1 = round(0.5 * g1_raw + 0.5 * (tot_xg * (p_win + 0.5 * p_draw)), 2)
+        xg2 = round(0.5 * g2_raw + 0.5 * (tot_xg * (p_loss + 0.5 * p_draw)), 2)
+
+        if monte_carlo:
+            # Chế độ Monte Carlo: Lấy mẫu ngẫu nhiên theo xác suất thực tế của AI
+            pred_label = int(rng.choice([0, 1, 2], p=[p_loss, p_draw, p_win]))
+            s1 = int(rng.poisson(max(0.3, xg1)))
+            s2 = int(rng.poisson(max(0.3, xg2)))
+            if pred_label == 2 and s1 <= s2:
+                s1 = s2 + 1
+            elif pred_label == 0 and s2 <= s1:
+                s2 = s1 + 1
+            elif pred_label == 1:
+                s1 = s2 = max(0, int(round((s1 + s2) / 2)))
+        else:
+            # Chế độ AI Chuẩn (Deterministic): Chọn phương án xác suất cao nhất
+            pred_label = int(np.argmax([p_loss, p_draw, p_win]))
+            s1 = max(0, int(round(xg1)))
+            s2 = max(0, int(round(xg2)))
+            if pred_label == 2 and s1 <= s2:
+                s1 = s2 + 1
+            elif pred_label == 0 and s2 <= s1:
+                s2 = s1 + 1
+            elif pred_label == 1 and s1 != s2:
+                s1 = s2 = max(1, int(round((xg1 + xg2) / 2)))
+
+        # Nếu là vòng loại trực tiếp (Knockout) và tỉ số Hòa -> phân định thắng thua (Hiệp phụ / Penalty)
+        is_ko = m.get("stage", "Group Stage") != "Group Stage"
+        pen_winner = None
+        if is_ko and s1 == s2:
+            if monte_carlo:
+                t1_adv = p_win / max(0.01, p_win + p_loss)
+                pen_winner = t1 if rng.random() < t1_adv else t2
+            else:
+                pen_winner = t1 if (p_win > p_loss or (p_win == p_loss and xg1 >= xg2)) else t2
+
+        winner = (
+            t1
+            if s1 > s2
+            else (t2 if s2 > s1 else (pen_winner if pen_winner else "Draw"))
+        )
+
+        results.append(
+            {
+                "team1": m["team1"],
+                "team2": m["team2"],
+                "score1": s1,
+                "score2": s2,
+                "xg1": xg1,
+                "xg2": xg2,
+                "prob1": round(p_win * 100, 1),
+                "prob_draw": round(p_draw * 100, 1),
+                "prob2": round(p_loss * 100, 1),
+                "winner": winner,
+                "penalty_winner": pen_winner,
+            }
+        )
+
+    return results
 
 
 def render_bar(percent: float, width: int = 25) -> str:
